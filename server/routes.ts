@@ -4,10 +4,11 @@ import { storage } from "./storage";
 import session from "express-session";
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
-import { insertUserSchema, insertAgentSchema, insertCommandSchema } from "@shared/schema";
+import { insertUserSchema, insertAgentSchema, insertCommandSchema, type Agent } from "@shared/schema";
 import { createId } from "@paralleldrive/cuid2";
 import { z } from "zod";
 import MemoryStore from "memorystore";
+import { WebSocketServer, WebSocket } from "ws";
 import { minecraftConnector } from "./minecraft";
 
 // Initialize express-session store
@@ -401,6 +402,168 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const httpServer = createServer(app);
+  
+  // Set up WebSocket server for real-time updates
+  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+  
+  // Track active client connections
+  const activeConnections = new Map<string, WebSocket>();
+  
+  wss.on('connection', (ws) => {
+    const clientId = createId();
+    activeConnections.set(clientId, ws);
+    
+    // Send initial connection success message
+    ws.send(JSON.stringify({ 
+      type: 'connection', 
+      status: 'connected', 
+      message: 'Connected to EnderKids WebSocket server',
+      clientId
+    }));
+    
+    // Handle client messages
+    ws.on('message', (message) => {
+      try {
+        const data = JSON.parse(message.toString());
+        
+        // Respond to subscription requests for specific agents
+        if (data.type === 'subscribe' && data.agentId) {
+          ws.send(JSON.stringify({
+            type: 'subscribed',
+            agentId: data.agentId,
+            message: `Subscribed to updates for agent ${data.agentId}`
+          }));
+          
+          // Immediately get and send agent status
+          const status = minecraftConnector.getAgentStatus(data.agentId);
+          ws.send(JSON.stringify({
+            type: 'agent_status',
+            agentId: data.agentId,
+            status: {
+              connected: status.connected,
+              world: status.world,
+              position: status.position,
+              lastAction: status.connected ? 'Idle' : 'Disconnected',
+              timeConnected: status.connected ? Date.now() : null
+            }
+          }));
+        }
+      } catch (error) {
+        console.error('Error processing WebSocket message:', error);
+      }
+    });
+    
+    // Handle client disconnect
+    ws.on('close', () => {
+      activeConnections.delete(clientId);
+    });
+  });
+  
+  // Add a helper function to broadcast agent status updates
+  // This can be called from other parts of the server when agent status changes
+  const broadcastAgentStatus = (agentId: number) => {
+    const status = minecraftConnector.getAgentStatus(agentId);
+    const agent = minecraftConnector.getOnlineAgent(agentId);
+    
+    const message = JSON.stringify({
+      type: 'agent_status',
+      agentId,
+      status: {
+        connected: status.connected,
+        world: status.world,
+        position: status.position,
+        lastAction: agent?.lastCommand || 'Idle',
+        timeConnected: agent?.connectTime || null
+      }
+    });
+    
+    // Send to all active connections
+    activeConnections.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(message);
+      }
+    });
+  };
+  
+  // Add a new endpoint to get detailed agent status
+  app.get("/api/agents/:id/status", isAuthenticated, async (req, res) => {
+    try {
+      const agentId = parseInt(req.params.id);
+      const agent = await storage.getAgentById(agentId);
+      
+      if (!agent) {
+        return res.status(404).json({ message: "Agent not found" });
+      }
+      
+      const userId = (req.user as any).id;
+      const isAdmin = (req.user as any).isAdmin;
+      
+      // Check if user owns agent or is admin
+      if (agent.userId !== userId && !isAdmin) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      
+      // Get agent connection status from Minecraft connector
+      const status = minecraftConnector.getAgentStatus(agentId);
+      const onlineAgent = minecraftConnector.getOnlineAgent(agentId);
+      
+      res.json({
+        id: agent.id,
+        name: agent.name,
+        type: agent.type,
+        status: agent.status,
+        connected: status.connected,
+        currentWorld: status.world,
+        position: status.position,
+        lastCommand: onlineAgent?.lastCommand,
+        lastCommandResponse: onlineAgent?.lastCommandResponse,
+        connectTime: onlineAgent?.connectTime
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+  
+  // Get all connected agents (for dashboard)
+  app.get("/api/agents/server/connected", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const isAdmin = (req.user as any).isAdmin;
+      
+      // Get all agents from the database that the user has access to
+      const agents = isAdmin 
+        ? await storage.getAllAgents()
+        : await storage.getAgentsByUserId(userId);
+      
+      // Get their connection status
+      const connectedAgents = agents
+        .filter((agent: Agent) => agent.status === 'active')
+        .map((agent: Agent) => {
+          const status = minecraftConnector.getAgentStatus(agent.id);
+          const onlineAgent = minecraftConnector.getOnlineAgent(agent.id);
+          
+          return {
+            id: agent.id,
+            name: agent.name,
+            type: agent.type,
+            connected: status.connected,
+            world: status.world,
+            position: status.position,
+            lastCommand: onlineAgent?.lastCommand,
+            lastCommandResponse: onlineAgent?.lastCommandResponse,
+            connectTime: onlineAgent?.connectTime,
+            currentActivity: onlineAgent?.lastCommand 
+              ? `Executing: ${onlineAgent.lastCommand}` 
+              : (status.connected ? 'Idle' : 'Not connected')
+          };
+        })
+        .filter((agent: {connected: boolean}) => agent.connected);
+      
+      res.json(connectedAgents);
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
 
   return httpServer;
 }

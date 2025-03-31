@@ -62,6 +62,8 @@ interface AgentConnection {
   };
   lastCommand?: string;
   lastCommandResponse?: string;
+  connectTime?: number; // Timestamp when the agent connected
+  currentActivity?: string; // What the agent is currently doing
 }
 
 export class MinecraftConnector {
@@ -117,7 +119,9 @@ export class MinecraftConnector {
           x: 0,
           y: 64,
           z: 0
-        }
+        },
+        connectTime: Date.now(),
+        currentActivity: 'Joining world'
       });
       
       return true;
@@ -167,6 +171,19 @@ export class MinecraftConnector {
       world: connection.world,
       position: connection.position
     };
+  }
+  
+  /**
+   * Get the full online agent connection information
+   */
+  getOnlineAgent(agentId: number): AgentConnection | undefined {
+    const connection = this.connections.get(agentId);
+    
+    if (!connection || connection.status !== 'connected') {
+      return undefined;
+    }
+    
+    return connection;
   }
   
   /**

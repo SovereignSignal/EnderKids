@@ -41,47 +41,136 @@ export function AgentControlPanel() {
     enabled: !!agentId,
   });
 
-  // Connect to Minecraft
+  // WebSocket connection for real-time updates
   useEffect(() => {
-    const connectToMinecraft = async () => {
-      if (agent) {
-        try {
-          const minecraft = new MinecraftConnection();
-          const agentStatus = await minecraft.getAgentStatus(agent.id);
+    if (!agent || !agentId) return;
+    
+    // Check if WebSocket is supported by the browser
+    if (!('WebSocket' in window)) {
+      console.error('WebSockets not supported');
+      return;
+    }
+    
+    // Create WebSocket connection
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    const socket = new WebSocket(wsUrl);
+    
+    // Connection opened
+    socket.addEventListener('open', () => {
+      console.log('Connected to WebSocket server');
+      
+      // Subscribe to agent updates
+      socket.send(JSON.stringify({
+        type: 'subscribe',
+        agentId: parseInt(agentId)
+      }));
+    });
+    
+    // Listen for messages
+    socket.addEventListener('message', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        // Handle agent status updates
+        if (data.type === 'agent_status' && data.agentId && data.status) {
+          const status = data.status;
           
-          if (!agentStatus) {
-            // Agent not connected, connect it
-            const connectedAgent = await minecraft.connectAgent(agent.id, agent.name);
-            setIsConnected(connectedAgent.connected);
-            if (connectedAgent.position) {
-              setPosition(connectedAgent.position);
-            }
-            if (connectedAgent.currentWorld) {
-              setWorldName(connectedAgent.currentWorld);
-            }
-          } else {
-            // Agent already connected
-            setIsConnected(agentStatus.connected);
-            if (agentStatus.position) {
-              setPosition(agentStatus.position);
-            }
-            if (agentStatus.currentWorld) {
-              setWorldName(agentStatus.currentWorld);
+          setIsConnected(status.connected);
+          
+          if (status.position) {
+            setPosition(status.position);
+          }
+          
+          if (status.world) {
+            setWorldName(status.world);
+          }
+          
+          // Add agent responses to command history
+          if (status.lastCommandResponse && status.lastCommandResponse !== '') {
+            const existingResponseIndex = commandHistory.findIndex(
+              item => item.type === 'bot' && item.content === status.lastCommandResponse
+            );
+            
+            // Only add new responses
+            if (existingResponseIndex === -1) {
+              setCommandHistory(prev => [
+                ...prev,
+                {
+                  id: Date.now(),
+                  type: 'bot',
+                  content: status.lastCommandResponse,
+                  timestamp: new Date()
+                }
+              ]);
             }
           }
-        } catch (error) {
-          console.error("Failed to connect to Minecraft:", error);
-          toast({
-            title: "Connection failed",
-            description: "Could not connect to Minecraft server",
-            variant: "destructive",
-          });
         }
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error);
+      }
+    });
+    
+    // Handle errors
+    socket.addEventListener('error', (error) => {
+      console.error('WebSocket error:', error);
+      toast({
+        title: "Connection error",
+        description: "Could not connect to real-time service",
+        variant: "destructive",
+      });
+    });
+    
+    // Handle connection close
+    socket.addEventListener('close', () => {
+      console.log('Disconnected from WebSocket server');
+    });
+    
+    // Initially connect to Minecraft
+    const connectToMinecraft = async () => {
+      try {
+        const minecraft = new MinecraftConnection();
+        const agentStatus = await minecraft.getAgentStatus(agent.id);
+        
+        if (!agentStatus || !agentStatus.connected) {
+          // Agent not connected, connect it
+          const connectedAgent = await minecraft.connectAgent(agent.id, agent.name);
+          setIsConnected(connectedAgent.connected);
+          if (connectedAgent.position) {
+            setPosition(connectedAgent.position);
+          }
+          if (connectedAgent.currentWorld) {
+            setWorldName(connectedAgent.currentWorld);
+          }
+        } else {
+          // Agent already connected
+          setIsConnected(agentStatus.connected);
+          if (agentStatus.position) {
+            setPosition(agentStatus.position);
+          }
+          if (agentStatus.currentWorld) {
+            setWorldName(agentStatus.currentWorld);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to connect to Minecraft:", error);
+        toast({
+          title: "Connection failed",
+          description: "Could not connect to Minecraft server",
+          variant: "destructive",
+        });
       }
     };
     
     connectToMinecraft();
-  }, [agent, toast]);
+    
+    // Cleanup function to close WebSocket connection when component unmounts
+    return () => {
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.close();
+      }
+    };
+  }, [agent, agentId, toast, commandHistory]);
 
   // Process commands
   useEffect(() => {

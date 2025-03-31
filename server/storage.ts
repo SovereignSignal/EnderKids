@@ -12,6 +12,7 @@ export interface IStorage {
   getAgentById(id: number): Promise<Agent | undefined>;
   updateAgentStatus(id: number, status: string): Promise<Agent | undefined>;
   getAllPendingAgents(): Promise<Agent[]>;
+  getAllAgents(): Promise<Agent[]>;
   
   // Command operations
   createCommand(command: InsertCommand): Promise<Command>;
@@ -115,6 +116,10 @@ export class MemStorage implements IStorage {
     return Array.from(this.agents.values()).filter(
       (agent) => agent.status === "pending",
     );
+  }
+  
+  async getAllAgents(): Promise<Agent[]> {
+    return Array.from(this.agents.values());
   }
 
   // Command operations
