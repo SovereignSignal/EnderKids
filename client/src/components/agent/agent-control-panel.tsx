@@ -71,6 +71,7 @@ export function AgentControlPanel() {
     socket.addEventListener('message', (event) => {
       try {
         const data = JSON.parse(event.data);
+        console.log("WebSocket message received:", data);
         
         // Handle agent status updates
         if (data.type === 'agent_status' && data.agentId && data.status) {
@@ -126,44 +127,6 @@ export function AgentControlPanel() {
       console.log('Disconnected from WebSocket server');
     });
     
-    // Initially connect to Minecraft
-    const connectToMinecraft = async () => {
-      try {
-        const minecraft = new MinecraftConnection();
-        const agentStatus = await minecraft.getAgentStatus(agent.id);
-        
-        if (!agentStatus || !agentStatus.connected) {
-          // Agent not connected, connect it
-          const connectedAgent = await minecraft.connectAgent(agent.id, agent.name);
-          setIsConnected(connectedAgent.connected);
-          if (connectedAgent.position) {
-            setPosition(connectedAgent.position);
-          }
-          if (connectedAgent.currentWorld) {
-            setWorldName(connectedAgent.currentWorld);
-          }
-        } else {
-          // Agent already connected
-          setIsConnected(agentStatus.connected);
-          if (agentStatus.position) {
-            setPosition(agentStatus.position);
-          }
-          if (agentStatus.currentWorld) {
-            setWorldName(agentStatus.currentWorld);
-          }
-        }
-      } catch (error) {
-        console.error("Failed to connect to Minecraft:", error);
-        toast({
-          title: "Connection failed",
-          description: "Could not connect to Minecraft server",
-          variant: "destructive",
-        });
-      }
-    };
-    
-    connectToMinecraft();
-    
     // Cleanup function to close WebSocket connection when component unmounts
     return () => {
       if (socket.readyState === WebSocket.OPEN) {
@@ -211,6 +174,46 @@ export function AgentControlPanel() {
     }
   }, [commandHistory]);
 
+  // Force connect the agent mutation
+  const connectAgentMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", `/api/agents/${agentId}/connect`, {});
+      return response.json();
+    },
+    onSuccess: (data) => {
+      console.log("Agent connected:", data);
+      setIsConnected(data.connected);
+      
+      if (data.position) {
+        setPosition(data.position);
+      }
+      
+      if (data.currentWorld) {
+        setWorldName(data.currentWorld);
+      }
+      
+      toast({
+        title: "Agent connected",
+        description: "Successfully connected to Minecraft server",
+        variant: "default",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Connection failed",
+        description: error instanceof Error ? error.message : "Could not connect to Minecraft server",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Force connection when control panel loads and not connected
+  useEffect(() => {
+    if (agent && !isConnected) {
+      connectAgentMutation.mutate();
+    }
+  }, [agent, isConnected]);
+
   // Send command mutation
   const sendCommandMutation = useMutation({
     mutationFn: async (command: string) => {
@@ -224,6 +227,17 @@ export function AgentControlPanel() {
       setCommand("");
       queryClient.invalidateQueries({ queryKey: [`/api/commands/agent/${agentId}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+      
+      // Add the user command to the history immediately, don't wait for server
+      setCommandHistory(prev => [
+        ...prev,
+        {
+          id: Date.now(),
+          type: "user",
+          content: command,
+          timestamp: new Date()
+        }
+      ]);
     },
     onError: (error) => {
       toast({
@@ -298,13 +312,25 @@ export function AgentControlPanel() {
         
         <CardContent className="p-6">
           {/* Agent Status */}
-          <div className="flex items-center mb-6">
-            <div className={`w-3 h-3 rounded-full mr-2 ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
-            <span className="text-sm font-medium text-gray-700">
-              {isConnected 
-                ? `Online - Connected to "${worldName}"` 
-                : "Offline - Not connected to a world"}
-            </span>
+          <div className="flex justify-between items-center mb-6">
+            <div className="flex items-center">
+              <div className={`w-3 h-3 rounded-full mr-2 ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+              <span className="text-sm font-medium text-gray-700">
+                {isConnected 
+                  ? `Online - Connected to "${worldName}"` 
+                  : "Offline - Not connected to a world"}
+              </span>
+            </div>
+            {!isConnected && (
+              <Button 
+                onClick={() => connectAgentMutation.mutate()}
+                size="sm"
+                className="bg-green-600 hover:bg-green-700 text-white"
+                disabled={connectAgentMutation.isPending}
+              >
+                {connectAgentMutation.isPending ? "Connecting..." : "Connect"}
+              </Button>
+            )}
           </div>
           
           {/* Agent Location */}

@@ -240,6 +240,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get agent status
       const status = minecraftConnector.getAgentStatus(agentId);
       
+      // Broadcast the updated agent status to all connected clients
+      broadcastAgentStatus(agentId);
+      
       res.json({
         id: agent.id,
         name: agent.name,
@@ -463,7 +466,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // This can be called from other parts of the server when agent status changes
   const broadcastAgentStatus = (agentId: number) => {
     const status = minecraftConnector.getAgentStatus(agentId);
-    const agent = minecraftConnector.getOnlineAgent(agentId);
+    const onlineAgent = minecraftConnector.getOnlineAgent(agentId);
     
     const message = JSON.stringify({
       type: 'agent_status',
@@ -472,8 +475,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         connected: status.connected,
         world: status.world,
         position: status.position,
-        lastAction: agent?.lastCommand || 'Idle',
-        timeConnected: agent?.connectTime || null
+        lastAction: onlineAgent?.lastCommand || 'Idle',
+        lastCommandResponse: onlineAgent?.lastCommandResponse || '',
+        timeConnected: onlineAgent?.connectTime || null
       }
     });
     
@@ -484,7 +488,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
   };
-  
+
   // Add a new endpoint to get detailed agent status
   app.get("/api/agents/:id/status", isAuthenticated, async (req, res) => {
     try {
