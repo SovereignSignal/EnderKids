@@ -37,7 +37,7 @@ export class MemStorage implements IStorage {
     // Create an admin user by default
     this.createUser({
       name: "Admin",
-      email: "admin@blockbots.com",
+      email: "menachem303@gmail.com",
       password: "admin123", // This would be hashed in production
       isAdmin: true
     });
