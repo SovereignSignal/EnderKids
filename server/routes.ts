@@ -1,4 +1,4 @@
-import type { Express, Request, Response } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import session from "express-session";
@@ -8,6 +8,7 @@ import { insertUserSchema, insertAgentSchema, insertCommandSchema } from "@share
 import { createId } from "@paralleldrive/cuid2";
 import { z } from "zod";
 import MemoryStore from "memorystore";
+import { minecraftConnector } from "./minecraft";
 
 // Initialize express-session store
 const SessionStore = MemoryStore(session);
@@ -114,14 +115,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/auth/login", (req, res, next) => {
-    passport.authenticate("local", (err, user, info) => {
+    passport.authenticate("local", (err: any, user: any, info: any) => {
       if (err) {
         return next(err);
       }
       if (!user) {
-        return res.status(401).json({ message: info.message || "Invalid credentials" });
+        return res.status(401).json({ message: info?.message || "Invalid credentials" });
       }
-      req.login(user, (err) => {
+      req.login(user, (err: any) => {
         if (err) {
           return next(err);
         }
@@ -214,10 +215,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid status" });
       }
       
+      // Get agent before update
+      const existingAgent = await storage.getAgentById(agentId);
+      if (!existingAgent) {
+        return res.status(404).json({ message: "Agent not found" });
+      }
+      
+      // Update agent status in database
       const agent = await storage.updateAgentStatus(agentId, status);
       
-      if (!agent) {
-        return res.status(404).json({ message: "Agent not found" });
+      // Handle Minecraft connection based on status change
+      if (status === "active" && existingAgent.status !== "active") {
+        // Connect to Minecraft when agent is activated
+        const connected = await minecraftConnector.connectAgent(agentId, agent?.name || `Agent_${agentId}`);
+        if (!connected) {
+          // If connection fails, log it but don't fail the request
+          console.warn(`Failed to connect agent ${agentId} to Minecraft server`);
+        }
+      } else if (status === "inactive" && existingAgent.status === "active") {
+        // Disconnect from Minecraft when agent is deactivated
+        await minecraftConnector.disconnectAgent(agentId);
       }
       
       res.json(agent);
@@ -233,9 +250,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isAdmin = (req.user as any).isAdmin;
       
       const { agentId, command } = req.body;
+      const agentIdNum = parseInt(agentId);
       
       // Check if agent exists
-      const agent = await storage.getAgentById(parseInt(agentId));
+      const agent = await storage.getAgentById(agentIdNum);
       if (!agent) {
         return res.status(404).json({ message: "Agent not found" });
       }
@@ -251,34 +269,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const commandData = insertCommandSchema.parse({
-        agentId: parseInt(agentId),
+        agentId: agentIdNum,
         userId,
         command
       });
       
+      // Create command in database
       const createdCommand = await storage.createCommand(commandData);
 
-      // This is where we'd connect to the Minecraft API/library
-      // For now, we'll just simulate a response
-      let response;
+      // Send command to Minecraft server
+      const result = await minecraftConnector.sendCommand(agentIdNum, command);
       
-      if (command.toLowerCase().includes("build")) {
-        response = "Building at the current location...";
-      } else if (command.toLowerCase().includes("mine")) {
-        response = "Mining for resources...";
-      } else if (command.toLowerCase().includes("come") || command.toLowerCase().includes("follow")) {
-        response = "Coming to your location!";
-      } else if (command.toLowerCase().includes("stop")) {
-        response = "Stopping current action.";
-      } else {
-        response = "Command received. Processing...";
-      }
+      // Update the command with the response
+      createdCommand.response = result.message;
       
-      // Update the command with a response
-      createdCommand.response = response;
-      
-      // In a real app, we'd save this update to storage
-      
+      // Return the command with the response
       res.status(201).json(createdCommand);
     } catch (error) {
       if (error instanceof z.ZodError) {

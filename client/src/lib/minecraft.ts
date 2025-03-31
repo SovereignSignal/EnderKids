@@ -1,6 +1,7 @@
-// This is a mock implementation of a Minecraft Bedrock connector
-// In a real application, this would use a library like bedrock-protocol
-// to connect to and interact with Minecraft Bedrock servers
+// Enhanced Minecraft connection client to interact with real Minecraft Bedrock servers
+// This communicates with our server API, which in turn connects to the Minecraft server
+
+import { apiRequest } from './queryClient';
 
 export interface MinecraftAgent {
   id: string;
@@ -20,91 +21,99 @@ export interface CommandResult {
 }
 
 export class MinecraftConnection {
-  private agents: Map<string, MinecraftAgent>;
+  private cachedAgentStatus: Map<string, MinecraftAgent>;
   
   constructor() {
-    this.agents = new Map();
+    this.cachedAgentStatus = new Map();
   }
   
-  // Connect an agent to a Minecraft world
-  async connectAgent(agentId: number, agentName: string): Promise<MinecraftAgent> {
-    const id = `agent_${agentId}`;
-    
-    // In a real implementation, this would connect to the Minecraft server
-    const agent: MinecraftAgent = {
-      id,
-      name: agentName,
-      connected: true,
-      currentWorld: "My Minecraft World",
-      position: {
-        x: Math.floor(Math.random() * 200) - 100,
-        y: 64,
-        z: Math.floor(Math.random() * 200) - 100
-      }
-    };
-    
-    this.agents.set(id, agent);
-    return agent;
-  }
-  
-  // Disconnect an agent
-  async disconnectAgent(agentId: number): Promise<boolean> {
-    const id = `agent_${agentId}`;
-    if (this.agents.has(id)) {
-      const agent = this.agents.get(id)!;
-      agent.connected = false;
-      this.agents.set(id, agent);
-      return true;
-    }
-    return false;
-  }
-  
-  // Get agent status
+  /**
+   * Get agent status from server/cache
+   * This is used to display real-time information about an agent
+   * In a production system, we might use WebSockets for live updates
+   */
   async getAgentStatus(agentId: number): Promise<MinecraftAgent | null> {
     const id = `agent_${agentId}`;
-    return this.agents.get(id) || null;
+    
+    try {
+      // In a real-time system, we would fetch this from an API endpoint
+      // Since we don't have a specific endpoint for this yet, we'll use cached data
+      // with a fallback to default values
+      
+      if (!this.cachedAgentStatus.has(id)) {
+        // Default initial values
+        this.cachedAgentStatus.set(id, {
+          id,
+          name: "Agent",
+          connected: false,
+          currentWorld: "EnderKids World",
+          position: {
+            x: 0,
+            y: 64,
+            z: 0
+          }
+        });
+      }
+      
+      return this.cachedAgentStatus.get(id) || null;
+    } catch (error) {
+      console.error("Error getting agent status:", error);
+      return null;
+    }
   }
   
-  // Send command to agent
+  /**
+   * Send a command to the agent via the API
+   */
   async sendCommand(agentId: number, command: string): Promise<CommandResult> {
-    const id = `agent_${agentId}`;
-    const agent = this.agents.get(id);
-    
-    if (!agent || !agent.connected) {
-      return { 
-        success: false, 
-        message: "Agent is not connected" 
+    try {
+      // Send command to server API
+      const response = await apiRequest('/api/commands', 'POST', {
+        agentId,
+        command
+      });
+      
+      // Update cached status with any new info
+      const id = `agent_${agentId}`;
+      const currentStatus = this.cachedAgentStatus.get(id) || {
+        id,
+        name: "Agent",
+        connected: true,
+        currentWorld: "EnderKids World"
+      };
+      
+      // Update cached agent status
+      this.cachedAgentStatus.set(id, {
+        ...currentStatus,
+        connected: true
+      });
+      
+      return {
+        success: true,
+        message: response.response || "Command sent."
+      };
+    } catch (error) {
+      console.error("Error sending command:", error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : "Failed to send command"
       };
     }
+  }
+  
+  /**
+   * In a real-time system, we would have methods to subscribe to agent updates
+   * For now, we'll provide a simpler implementation
+   */
+  async updateAgentPosition(agentId: number, position: { x: number; y: number; z: number }): Promise<void> {
+    const id = `agent_${agentId}`;
+    const currentStatus = this.cachedAgentStatus.get(id);
     
-    // In a real implementation, this would send the command to the Minecraft server
-    // For this mock, we'll just simulate different responses based on the command
-    
-    if (command.toLowerCase().includes("build")) {
-      return { 
-        success: true, 
-        message: "Building at current location..." 
-      };
-    } else if (command.toLowerCase().includes("mine")) {
-      return { 
-        success: true, 
-        message: "Mining for resources..." 
-      };
-    } else if (command.toLowerCase().includes("come") || command.toLowerCase().includes("follow")) {
-      return { 
-        success: true, 
-        message: "Coming to your location!" 
-      };
-    } else if (command.toLowerCase().includes("stop")) {
-      return { 
-        success: true, 
-        message: "Stopping current action." 
-      };
-    } else {
-      return { 
-        success: true, 
-        message: "Command received. Processing..." 
-      };
+    if (currentStatus) {
+      this.cachedAgentStatus.set(id, {
+        ...currentStatus,
+        position
+      });
     }
   }
 }
