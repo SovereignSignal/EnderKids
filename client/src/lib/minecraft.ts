@@ -110,15 +110,20 @@ export class MinecraftConnection {
     const id = `agent_${agentId}`;
     
     try {
-      // Request connection to the Minecraft server
-      const response = await apiRequest('POST', `/api/agents/${agentId}/connect`);
+      console.log(`Connecting agent ${agentId} (${agentName}) to Minecraft server...`);
+      
+      // Request connection to the Minecraft server - this triggers the actual connection on the backend
+      const response = await apiRequest('POST', `/api/agents/${agentId}/connect`, {});
       const responseData = await response.json();
       
-      // Update cached agent status with server response or default values
+      console.log(`Server connection response for agent ${agentId}:`, responseData);
+      
+      // Update cached agent status with server response
       const newStatus: MinecraftAgent = {
         id,
         name: responseData.name || agentName,
-        connected: responseData.connected || true,
+        // Make sure we're using the actual connected value from the response
+        connected: responseData.connected === true,
         currentWorld: responseData.currentWorld || "EnderKids World",
         position: responseData.position || {
           x: 0,
@@ -126,6 +131,8 @@ export class MinecraftConnection {
           z: 0
         }
       };
+      
+      console.log(`Updated agent status:`, newStatus);
       
       this.cachedAgentStatus.set(id, newStatus);
       return newStatus;

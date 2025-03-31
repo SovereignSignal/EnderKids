@@ -77,6 +77,10 @@ export function AgentControlPanel() {
         if (data.type === 'agent_status' && data.agentId && data.status) {
           const status = data.status;
           
+          // Log status update for debugging
+          console.log(`Agent ${data.agentId} status update:`, status);
+          
+          // Update connection state
           setIsConnected(status.connected);
           
           if (status.position) {
@@ -89,6 +93,7 @@ export function AgentControlPanel() {
           
           // Add agent responses to command history
           if (status.lastCommandResponse && status.lastCommandResponse !== '') {
+            // Check if this response already exists in history to avoid duplicates
             const existingResponseIndex = commandHistory.findIndex(
               item => item.type === 'bot' && item.content === status.lastCommandResponse
             );
@@ -105,6 +110,15 @@ export function AgentControlPanel() {
                 }
               ]);
             }
+          }
+          
+          // If connection status changes, update UI and trigger actions
+          if (status.connected) {
+            toast({
+              title: "Agent connected",
+              description: `Connected to ${status.world || 'Minecraft world'}`,
+              variant: "default",
+            });
           }
         }
       } catch (error) {
@@ -207,12 +221,15 @@ export function AgentControlPanel() {
     },
   });
 
-  // Force connection when control panel loads and not connected
+  // Force connection when control panel loads and agent is active
   useEffect(() => {
-    if (agent && !isConnected) {
+    if (agent && agent.status === 'active') {
       connectAgentMutation.mutate();
+      
+      // Log connection attempt for debugging
+      console.log(`Attempting to connect agent ${agent.id} (${agent.name})`);
     }
-  }, [agent, isConnected]);
+  }, [agent]);
 
   // Send command mutation
   const sendCommandMutation = useMutation({

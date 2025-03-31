@@ -9,6 +9,8 @@ class BedrockClient {
   private username: string;
   private callbacks: Record<string, Array<(data?: any) => void>>;
   private simulatedConnectionDelay = 1500; // ms
+  private connectionTimeout: NodeJS.Timeout | null = null;
+  private isConnected: boolean = false;
 
   constructor(options: {
     host: string,
@@ -21,7 +23,8 @@ class BedrockClient {
     this.callbacks = {};
 
     // Simulate successful connection after a delay
-    setTimeout(() => {
+    this.connectionTimeout = setTimeout(() => {
+      this.isConnected = true;
       this.triggerEvent('connect');
     }, this.simulatedConnectionDelay);
   }
@@ -40,6 +43,11 @@ class BedrockClient {
   }
 
   end(reason: string) {
+    if (this.connectionTimeout) {
+      clearTimeout(this.connectionTimeout);
+      this.connectionTimeout = null;
+    }
+    this.isConnected = false;
     this.triggerEvent('disconnect', reason);
   }
 
@@ -81,6 +89,22 @@ export class MinecraftConnector {
     try {
       log(`Attempting to connect agent ${agentId} (${agentName}) to Minecraft Bedrock server...`, 'minecraft');
       
+      // Check if agent is already connected
+      const existingConnection = this.connections.get(agentId);
+      if (existingConnection && existingConnection.status === 'connected') {
+        log(`Agent ${agentId} (${agentName}) is already connected to Minecraft Bedrock server`, 'minecraft');
+        return true;
+      }
+      
+      // If there's an existing connection in another state, disconnect it first
+      if (existingConnection) {
+        try {
+          existingConnection.client.end('Reconnecting agent');
+        } catch (e) {
+          // Ignore errors when ending previous connections
+        }
+      }
+      
       // Unique username for this agent
       const username = `${agentName}_${agentId}`;
       
@@ -91,27 +115,8 @@ export class MinecraftConnector {
         username: username
       });
       
-      // Setup client event handlers
-      client.on('connect', () => {
-        log(`Agent ${agentId} (${agentName}) connected to Minecraft Bedrock server`, 'minecraft');
-        const connection = this.connections.get(agentId);
-        if (connection) {
-          connection.status = 'connected';
-          this.connections.set(agentId, connection);
-        }
-      });
-      
-      client.on('disconnect', (reason) => {
-        log(`Agent ${agentId} (${agentName}) disconnected from Minecraft Bedrock server: ${reason}`, 'minecraft');
-        const connection = this.connections.get(agentId);
-        if (connection) {
-          connection.status = 'disconnected';
-          this.connections.set(agentId, connection);
-        }
-      });
-      
-      // Save connection
-      this.connections.set(agentId, {
+      // Create new connection object
+      const newConnection: AgentConnection = {
         client,
         status: 'connecting',
         world: 'EnderKids World',
@@ -122,6 +127,31 @@ export class MinecraftConnector {
         },
         connectTime: Date.now(),
         currentActivity: 'Joining world'
+      };
+      
+      // Save connection
+      this.connections.set(agentId, newConnection);
+      
+      // Setup client event handlers
+      client.on('connect', () => {
+        log(`Agent ${agentId} (${agentName}) connected to Minecraft Bedrock server`, 'minecraft');
+        
+        // Update the connection status directly, not using the previously fetched reference
+        const updatedConnection = this.connections.get(agentId);
+        if (updatedConnection) {
+          updatedConnection.status = 'connected';
+          this.connections.set(agentId, updatedConnection);
+        }
+      });
+      
+      client.on('disconnect', (reason) => {
+        log(`Agent ${agentId} (${agentName}) disconnected from Minecraft Bedrock server: ${reason}`, 'minecraft');
+        
+        const updatedConnection = this.connections.get(agentId);
+        if (updatedConnection) {
+          updatedConnection.status = 'disconnected';
+          this.connections.set(agentId, updatedConnection);
+        }
       });
       
       return true;

@@ -280,10 +280,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!connected) {
           // If connection fails, log it but don't fail the request
           console.warn(`Failed to connect agent ${agentId} to Minecraft server`);
+        } else {
+          // Broadcast updated status
+          broadcastAgentStatus(agentId);
         }
       } else if (status === "inactive" && existingAgent.status === "active") {
         // Disconnect from Minecraft when agent is deactivated
         await minecraftConnector.disconnectAgent(agentId);
+        // Broadcast updated status
+        broadcastAgentStatus(agentId);
       }
       
       res.json(agent);
@@ -331,6 +336,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Update the command with the response
       createdCommand.response = result.message;
+      
+      // Broadcast the agent status update to all connected clients
+      broadcastAgentStatus(agentIdNum);
       
       // Return the command with the response
       res.status(201).json(createdCommand);
@@ -439,6 +447,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           // Immediately get and send agent status
           const status = minecraftConnector.getAgentStatus(data.agentId);
+          const onlineAgent = minecraftConnector.getOnlineAgent(data.agentId);
+          
           ws.send(JSON.stringify({
             type: 'agent_status',
             agentId: data.agentId,
@@ -446,8 +456,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
               connected: status.connected,
               world: status.world,
               position: status.position,
-              lastAction: status.connected ? 'Idle' : 'Disconnected',
-              timeConnected: status.connected ? Date.now() : null
+              lastAction: onlineAgent?.lastCommand || (status.connected ? 'Idle' : 'Disconnected'),
+              lastCommandResponse: onlineAgent?.lastCommandResponse || '',
+              timeConnected: onlineAgent?.connectTime || null
             }
           }));
         }
