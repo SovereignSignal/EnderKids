@@ -119,21 +119,31 @@ export function CreateAgentModal({ isOpen, onClose }: CreateAgentModalProps) {
                       value={field.value}
                       className="grid grid-cols-2 gap-4"
                     >
-                      <FormItem className="flex flex-col items-center space-y-2 border rounded p-3 cursor-pointer hover:bg-gray-50">
-                        <FormControl>
-                          <RadioGroupItem value="builder" className="sr-only" />
-                        </FormControl>
-                        <Construction className="h-8 w-8 text-[#26A69A]" />
-                        <FormLabel className="font-medium">Builder</FormLabel>
-                      </FormItem>
+                      <div 
+                        className={`flex flex-col items-center space-y-2 border rounded p-3 cursor-pointer hover:bg-gray-50 ${field.value === 'builder' ? 'bg-gray-100 border-primary' : ''}`}
+                        onClick={() => field.onChange('builder')}
+                      >
+                        <FormItem>
+                          <FormControl>
+                            <RadioGroupItem value="builder" className="sr-only" />
+                          </FormControl>
+                          <Construction className="h-8 w-8 text-[#26A69A]" />
+                          <FormLabel className="font-medium">Builder</FormLabel>
+                        </FormItem>
+                      </div>
                       
-                      <FormItem className="flex flex-col items-center space-y-2 border rounded p-3 cursor-pointer hover:bg-gray-50">
-                        <FormControl>
-                          <RadioGroupItem value="miner" className="sr-only" />
-                        </FormControl>
-                        <Pickaxe className="h-8 w-8 text-[#825432]" />
-                        <FormLabel className="font-medium">Miner</FormLabel>
-                      </FormItem>
+                      <div 
+                        className={`flex flex-col items-center space-y-2 border rounded p-3 cursor-pointer hover:bg-gray-50 ${field.value === 'miner' ? 'bg-gray-100 border-primary' : ''}`}
+                        onClick={() => field.onChange('miner')}
+                      >
+                        <FormItem>
+                          <FormControl>
+                            <RadioGroupItem value="miner" className="sr-only" />
+                          </FormControl>
+                          <Pickaxe className="h-8 w-8 text-[#825432]" />
+                          <FormLabel className="font-medium">Miner</FormLabel>
+                        </FormItem>
+                      </div>
                     </RadioGroup>
                   </FormControl>
                   <FormMessage />
