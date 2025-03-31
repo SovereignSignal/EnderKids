@@ -26,6 +26,24 @@ export function AgentList() {
   const [_, setLocation] = useLocation();
   const [agentStatuses, setAgentStatuses] = useState<Map<number, AgentStatus>>(new Map());
   
+  // Format connection time
+  const formatConnectionTime = (connectTime?: number): string => {
+    if (!connectTime) return "Not connected";
+    
+    const now = Date.now();
+    const diffMs = now - connectTime;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHrs = Math.floor(diffMins / 60);
+    
+    if (diffHrs > 0) {
+      return `${diffHrs}h ${diffMins % 60}m`;
+    } else if (diffMins > 0) {
+      return `${diffMins}m`;
+    } else {
+      return "Just now";
+    }
+  };
+  
   const { data: agents, isLoading } = useQuery<Agent[]>({
     queryKey: ["/api/agents"],
   });
@@ -47,72 +65,10 @@ export function AgentList() {
     }
   }, [connectedAgents]);
 
-  const handleControlClick = (agentId: number) => {
-    setLocation(`/agent/${agentId}`);
-  };
-  
-  // Format connection time
-  const formatConnectionTime = (connectTime?: number): string => {
-    if (!connectTime) return "Not connected";
-    
-    const now = Date.now();
-    const diffMs = now - connectTime;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHrs = Math.floor(diffMins / 60);
-    
-    if (diffHrs > 0) {
-      return `${diffHrs}h ${diffMins % 60}m`;
-    } else if (diffMins > 0) {
-      return `${diffMins}m`;
-    } else {
-      return "Just now";
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        {[1, 2, 3].map((id) => (
-          <Card key={id} className="overflow-hidden">
-            <CardHeader className="bg-[#26A69A] p-3 text-white">
-              <Skeleton className="h-6 w-24 bg-white/30" />
-            </CardHeader>
-            <CardContent className="p-4">
-              <div className="flex items-start mb-4">
-                <Skeleton className="h-16 w-16 rounded mr-3" />
-                <div>
-                  <Skeleton className="h-4 w-32 mb-2" />
-                  <Skeleton className="h-4 w-24" />
-                </div>
-              </div>
-              <div className="mb-4">
-                <Skeleton className="h-4 w-20 mb-2" />
-                <Skeleton className="h-8 w-full" />
-              </div>
-              <div className="flex space-x-2">
-                <Skeleton className="h-8 w-16" />
-                <Skeleton className="h-8 w-16" />
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    );
-  }
-
-  if (!agents || agents.length === 0) {
-    return (
-      <div className="text-center p-8 bg-white rounded-lg shadow-md">
-        <h3 className="text-xl font-semibold mb-2">No Agents Yet</h3>
-        <p className="text-gray-600 mb-4">
-          You haven't created any agents yet. Create your first agent to get started!
-        </p>
-      </div>
-    );
-  }
-
   // Set up WebSocket connection for real-time updates
   useEffect(() => {
+    if (!agents) return;
+    
     // Check if WebSocket is supported by the browser
     if (!('WebSocket' in window)) {
       console.error('WebSockets not supported');
@@ -183,6 +139,52 @@ export function AgentList() {
       }
     };
   }, [agents]);
+
+  const handleControlClick = (agentId: number) => {
+    setLocation(`/agent/${agentId}`);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        {[1, 2, 3].map((id) => (
+          <Card key={id} className="overflow-hidden">
+            <CardHeader className="bg-[#26A69A] p-3 text-white">
+              <Skeleton className="h-6 w-24 bg-white/30" />
+            </CardHeader>
+            <CardContent className="p-4">
+              <div className="flex items-start mb-4">
+                <Skeleton className="h-16 w-16 rounded mr-3" />
+                <div>
+                  <Skeleton className="h-4 w-32 mb-2" />
+                  <Skeleton className="h-4 w-24" />
+                </div>
+              </div>
+              <div className="mb-4">
+                <Skeleton className="h-4 w-20 mb-2" />
+                <Skeleton className="h-8 w-full" />
+              </div>
+              <div className="flex space-x-2">
+                <Skeleton className="h-8 w-16" />
+                <Skeleton className="h-8 w-16" />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  }
+
+  if (!agents || agents.length === 0) {
+    return (
+      <div className="text-center p-8 bg-white rounded-lg shadow-md">
+        <h3 className="text-xl font-semibold mb-2">No Agents Yet</h3>
+        <p className="text-gray-600 mb-4">
+          You haven't created any agents yet. Create your first agent to get started!
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
