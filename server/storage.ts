@@ -57,7 +57,9 @@ export class MemStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = this.userIdCounter++;
     const createdAt = new Date();
-    const user: User = { ...insertUser, id, createdAt };
+    // Ensure isAdmin is boolean
+    const isAdmin = insertUser.isAdmin === undefined ? false : insertUser.isAdmin;
+    const user: User = { ...insertUser, id, createdAt, isAdmin };
     this.users.set(id, user);
     return user;
   }
@@ -66,13 +68,16 @@ export class MemStorage implements IStorage {
   async createAgent(insertAgent: InsertAgent): Promise<Agent> {
     const id = this.agentIdCounter++;
     const createdAt = new Date();
+    // Ensure description is not undefined
+    const description = insertAgent.description === undefined ? null : insertAgent.description;
     const agent: Agent = { 
       ...insertAgent, 
       id, 
       createdAt, 
       status: "pending",
       lastActive: null,
-      avatarUrl: null
+      avatarUrl: null,
+      description
     };
     this.agents.set(id, agent);
     return agent;

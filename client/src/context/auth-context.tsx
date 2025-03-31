@@ -78,7 +78,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(userData);
       toast({
         title: "Registration successful",
-        description: `Welcome to BlockBots, ${userData.name}!`,
+        description: `Welcome to EnderKids, ${userData.name}!`,
       });
       return true;
     } catch (error) {

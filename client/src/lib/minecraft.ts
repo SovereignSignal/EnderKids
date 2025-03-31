@@ -68,10 +68,12 @@ export class MinecraftConnection {
   async sendCommand(agentId: number, command: string): Promise<CommandResult> {
     try {
       // Send command to server API
-      const response = await apiRequest('/api/commands', 'POST', {
+      const response = await apiRequest('POST', '/api/commands', {
         agentId,
         command
       });
+      
+      const responseData = await response.json();
       
       // Update cached status with any new info
       const id = `agent_${agentId}`;
@@ -90,7 +92,7 @@ export class MinecraftConnection {
       
       return {
         success: true,
-        message: response.response || "Command sent."
+        message: responseData.response || "Command sent."
       };
     } catch (error) {
       console.error("Error sending command:", error);
@@ -109,15 +111,16 @@ export class MinecraftConnection {
     
     try {
       // Request connection to the Minecraft server
-      const response = await apiRequest(`/api/agents/${agentId}/connect`, 'POST');
+      const response = await apiRequest('POST', `/api/agents/${agentId}/connect`);
+      const responseData = await response.json();
       
-      // Update cached agent status
+      // Update cached agent status with server response or default values
       const newStatus: MinecraftAgent = {
         id,
-        name: agentName,
-        connected: true,
-        currentWorld: "EnderKids World",
-        position: {
+        name: responseData.name || agentName,
+        connected: responseData.connected || true,
+        currentWorld: responseData.currentWorld || "EnderKids World",
+        position: responseData.position || {
           x: 0,
           y: 64,
           z: 0
