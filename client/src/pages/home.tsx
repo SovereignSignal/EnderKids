@@ -26,10 +26,10 @@ export default function Home() {
   return (
     <div className="container mx-auto px-4">
       <div className="my-10 text-center">
-        <h1 className="text-3xl md:text-4xl font-bold mb-4">Welcome to BlockBots</h1>
+        <h1 className="text-3xl md:text-4xl font-bold mb-4">Welcome to EnderKids</h1>
         <p className="text-gray-600 max-w-2xl mx-auto">
-          The platform to create, control, and interact with Minecraft agents.
-          Join now to start building your own Minecraft automation.
+          The platform for kids to create, control, and interact with Minecraft agents.
+          Join now to start your adventure in the Minecraft world!
         </p>
       </div>
       

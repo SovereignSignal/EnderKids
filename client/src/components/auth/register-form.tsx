@@ -49,7 +49,7 @@ export function RegisterForm() {
   return (
     <>
       <CardHeader>
-        <CardTitle className="text-2xl font-bold text-center">Create an Account</CardTitle>
+        <CardTitle className="text-2xl font-bold text-center">Join EnderKids</CardTitle>
       </CardHeader>
       <CardContent>
         <Form {...form}>

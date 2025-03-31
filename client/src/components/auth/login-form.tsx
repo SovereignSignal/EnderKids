@@ -42,7 +42,7 @@ export function LoginForm() {
   return (
     <>
       <CardHeader>
-        <CardTitle className="text-2xl font-bold text-center">Login to BlockBots</CardTitle>
+        <CardTitle className="text-2xl font-bold text-center">Login to EnderKids</CardTitle>
       </CardHeader>
       <CardContent>
         <Form {...form}>

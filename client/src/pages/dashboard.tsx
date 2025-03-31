@@ -38,8 +38,8 @@ export default function Dashboard() {
     <div className="container mx-auto px-4 py-6">
       {/* Welcome Banner */}
       <div className="bg-[#5B8731] rounded-lg p-6 mb-8 text-white shadow-lg">
-        <h1 className="text-2xl md:text-3xl font-bold mb-2">Welcome to BlockBots!</h1>
-        <p className="mb-4">Create and manage your Minecraft agents to help you build amazing worlds.</p>
+        <h1 className="text-2xl md:text-3xl font-bold mb-2">Welcome to EnderKids!</h1>
+        <p className="mb-4">Create and manage your Minecraft agents to explore and build awesome worlds.</p>
         <Button 
           className="bg-[#FF9800] hover:bg-[#FF9800]/90 text-white shadow-inner"
           onClick={() => setIsCreateModalOpen(true)}

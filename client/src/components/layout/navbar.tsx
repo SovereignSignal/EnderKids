@@ -31,7 +31,7 @@ export function Navbar() {
               <rect x="6" y="18" width="8" height="8" fill="#8BC34A" />
               <rect x="18" y="18" width="8" height="8" fill="#8BC34A" />
             </svg>
-            <h1 className="text-xl sm:text-2xl tracking-wide">BlockBots</h1>
+            <h1 className="text-xl sm:text-2xl tracking-wide">EnderKids</h1>
           </div>
 
           <div className="hidden md:flex items-center space-x-6 font-medium">
