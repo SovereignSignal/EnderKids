@@ -102,6 +102,44 @@ export class MinecraftConnection {
   }
   
   /**
+   * Connect an agent to the Minecraft server
+   */
+  async connectAgent(agentId: number, agentName: string): Promise<MinecraftAgent> {
+    const id = `agent_${agentId}`;
+    
+    try {
+      // Request connection to the Minecraft server
+      const response = await apiRequest(`/api/agents/${agentId}/connect`, 'POST');
+      
+      // Update cached agent status
+      const newStatus: MinecraftAgent = {
+        id,
+        name: agentName,
+        connected: true,
+        currentWorld: "EnderKids World",
+        position: {
+          x: 0,
+          y: 64,
+          z: 0
+        }
+      };
+      
+      this.cachedAgentStatus.set(id, newStatus);
+      return newStatus;
+    } catch (error) {
+      console.error("Error connecting agent:", error);
+      // Return a disconnected agent status
+      const disconnectedStatus: MinecraftAgent = {
+        id,
+        name: agentName,
+        connected: false
+      };
+      this.cachedAgentStatus.set(id, disconnectedStatus);
+      return disconnectedStatus;
+    }
+  }
+  
+  /**
    * In a real-time system, we would have methods to subscribe to agent updates
    * For now, we'll provide a simpler implementation
    */

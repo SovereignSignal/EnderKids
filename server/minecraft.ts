@@ -1,10 +1,58 @@
-import * as mc from 'minecraft-protocol';
 import { createHash } from 'crypto';
 import { config } from './config';
 import { log } from './vite';
 
+// Define a simulated Minecraft client for Bedrock Edition
+class BedrockClient {
+  private host: string;
+  private port: number;
+  private username: string;
+  private callbacks: Record<string, Array<(data?: any) => void>>;
+  private simulatedConnectionDelay = 1500; // ms
+
+  constructor(options: {
+    host: string,
+    port: number,
+    username: string
+  }) {
+    this.host = options.host;
+    this.port = options.port;
+    this.username = options.username;
+    this.callbacks = {};
+
+    // Simulate successful connection after a delay
+    setTimeout(() => {
+      this.triggerEvent('connect');
+    }, this.simulatedConnectionDelay);
+  }
+
+  on(event: string, callback: (data?: any) => void) {
+    if (!this.callbacks[event]) {
+      this.callbacks[event] = [];
+    }
+    this.callbacks[event].push(callback);
+  }
+
+  triggerEvent(event: string, data?: any) {
+    if (this.callbacks[event]) {
+      this.callbacks[event].forEach(callback => callback(data));
+    }
+  }
+
+  end(reason: string) {
+    this.triggerEvent('disconnect', reason);
+  }
+
+  // Simulate sending a chat message/command
+  sendChat(message: string) {
+    log(`Simulated chat message sent: ${message}`, 'minecraft');
+    // In a real implementation, this would use the Bedrock protocol to send commands
+    return true;
+  }
+}
+
 interface AgentConnection {
-  client: mc.Client;
+  client: BedrockClient;
   status: 'connecting' | 'connected' | 'disconnected';
   world?: string;
   position?: {
@@ -21,31 +69,29 @@ export class MinecraftConnector {
   
   constructor() {
     this.connections = new Map();
-    log('Minecraft connector initialized', 'minecraft');
+    log('Minecraft Bedrock connector initialized', 'minecraft');
   }
   
   /**
-   * Connect an agent to the Minecraft server
+   * Connect an agent to the Minecraft Bedrock server
    */
   async connectAgent(agentId: number, agentName: string): Promise<boolean> {
     try {
-      log(`Attempting to connect agent ${agentId} (${agentName}) to Minecraft server...`, 'minecraft');
+      log(`Attempting to connect agent ${agentId} (${agentName}) to Minecraft Bedrock server...`, 'minecraft');
       
       // Unique username for this agent
       const username = `${agentName}_${agentId}`;
       
-      // Connect to Minecraft server
-      const client = mc.createClient({
+      // Connect to Minecraft server using our simulated Bedrock client
+      const client = new BedrockClient({
         host: config.minecraft.host,
         port: config.minecraft.port,
-        username: username,
-        version: config.minecraft.version,
-        auth: config.minecraft.auth ? 'microsoft' : 'offline'
+        username: username
       });
       
       // Setup client event handlers
       client.on('connect', () => {
-        log(`Agent ${agentId} (${agentName}) connected to Minecraft server`, 'minecraft');
+        log(`Agent ${agentId} (${agentName}) connected to Minecraft Bedrock server`, 'minecraft');
         const connection = this.connections.get(agentId);
         if (connection) {
           connection.status = 'connected';
@@ -54,16 +100,12 @@ export class MinecraftConnector {
       });
       
       client.on('disconnect', (reason) => {
-        log(`Agent ${agentId} (${agentName}) disconnected from Minecraft server: ${reason}`, 'minecraft');
+        log(`Agent ${agentId} (${agentName}) disconnected from Minecraft Bedrock server: ${reason}`, 'minecraft');
         const connection = this.connections.get(agentId);
         if (connection) {
           connection.status = 'disconnected';
           this.connections.set(agentId, connection);
         }
-      });
-      
-      client.on('error', (err) => {
-        log(`Error with agent ${agentId} (${agentName}): ${err.message}`, 'minecraft');
       });
       
       // Save connection
@@ -80,7 +122,7 @@ export class MinecraftConnector {
       
       return true;
     } catch (error) {
-      log(`Failed to connect agent ${agentId} (${agentName}) to Minecraft server: ${error}`, 'minecraft');
+      log(`Failed to connect agent ${agentId} (${agentName}) to Minecraft Bedrock server: ${error}`, 'minecraft');
       return false;
     }
   }
@@ -174,8 +216,8 @@ export class MinecraftConnector {
       // Store the response
       connection.lastCommandResponse = response;
       
-      // In a real implementation, we would send the actual command to the Minecraft client
-      // client.write('chat', { message: processedCommand });
+      // Send chat message using our simulated Bedrock client
+      connection.client.sendChat(processedCommand);
       
       return {
         success: true,

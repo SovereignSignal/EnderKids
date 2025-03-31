@@ -205,6 +205,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Internal server error" });
     }
   });
+  
+  // Connect agent to Minecraft
+  app.post("/api/agents/:id/connect", isAuthenticated, async (req, res) => {
+    try {
+      const agentId = parseInt(req.params.id);
+      const agent = await storage.getAgentById(agentId);
+      
+      if (!agent) {
+        return res.status(404).json({ message: "Agent not found" });
+      }
+      
+      const userId = (req.user as any).id;
+      const isAdmin = (req.user as any).isAdmin;
+      
+      // Check if user owns agent or is admin
+      if (agent.userId !== userId && !isAdmin) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      
+      // Check if agent is active
+      if (agent.status !== "active") {
+        return res.status(400).json({ message: "Agent must be active to connect" });
+      }
+      
+      // Connect to Minecraft
+      const connected = await minecraftConnector.connectAgent(agentId, agent.name);
+      
+      if (!connected) {
+        return res.status(500).json({ message: "Failed to connect agent to Minecraft" });
+      }
+      
+      // Get agent status
+      const status = minecraftConnector.getAgentStatus(agentId);
+      
+      res.json({
+        id: agent.id,
+        name: agent.name,
+        connected: status.connected,
+        currentWorld: status.world,
+        position: status.position
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
 
   app.patch("/api/agents/:id/status", isAdmin, async (req, res) => {
     try {
