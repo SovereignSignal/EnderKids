@@ -40,6 +40,14 @@ export class MemStorage implements IStorage {
       email: "menachem303@gmail.com",
       password: "admin123", // This would be hashed in production
       isAdmin: true
+    }).then(adminUser => {
+      // Create a sample pending agent for demo purposes
+      this.createAgent({
+        name: "BuilderBot1",
+        type: "builder",
+        description: "A builder agent for constructing houses and structures",
+        userId: adminUser.id
+      });
     });
   }
 
