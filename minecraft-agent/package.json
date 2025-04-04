@@ -1,0 +1,15 @@
+{
+  "name": "minecraft-bedrock-agent",
+  "version": "1.0.0",
+  "description": "A real Minecraft Bedrock agent that connects to a server",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "simple": "node simple-agent.js"
+  },
+  "dependencies": {
+    "bedrock-protocol": "^3.44.0",
+    "ws": "^8.16.0"
+  }
+}

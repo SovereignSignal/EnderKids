@@ -22,9 +22,16 @@ class BedrockClient {
     this.username = options.username;
     this.callbacks = {};
 
-    // Simulate successful connection after a delay
+    log(`BedrockClient: Attempting to connect to ${this.host}:${this.port} as ${this.username}`, 'minecraft');
+    
+    // Simulate connection process
     this.connectionTimeout = setTimeout(() => {
+      // Always attempt to connect to the configured server
+      log(`BedrockClient: Attempting to connect to ${this.host}:${this.port} as ${this.username}`, 'minecraft');
+      
+      // For this simulation, we'll assume the connection is successful
       this.isConnected = true;
+      log(`BedrockClient: Successfully connected to ${this.host}:${this.port} as ${this.username}`, 'minecraft');
       this.triggerEvent('connect');
     }, this.simulatedConnectionDelay);
   }
@@ -34,6 +41,11 @@ class BedrockClient {
       this.callbacks[event] = [];
     }
     this.callbacks[event].push(callback);
+    
+    // If registering for 'connect' event and we're already connected, trigger immediately
+    if (event === 'connect' && this.isConnected) {
+      callback();
+    }
   }
 
   triggerEvent(event: string, data?: any) {
@@ -53,7 +65,8 @@ class BedrockClient {
 
   // Simulate sending a chat message/command
   sendChat(message: string) {
-    log(`Simulated chat message sent: ${message}`, 'minecraft');
+    log(`[SIMULATION] Chat message sent to ${this.host}:${this.port} as ${this.username}: ${message}`, 'minecraft');
+    log(`[NOTE] This is a simulation - no actual connection to the Minecraft server is being made`, 'minecraft');
     // In a real implementation, this would use the Bedrock protocol to send commands
     return true;
   }
@@ -87,7 +100,8 @@ export class MinecraftConnector {
    */
   async connectAgent(agentId: number, agentName: string): Promise<boolean> {
     try {
-      log(`Attempting to connect agent ${agentId} (${agentName}) to Minecraft Bedrock server...`, 'minecraft');
+      log(`[SIMULATION] Attempting to connect agent ${agentId} (${agentName}) to Minecraft Bedrock server at ${config.minecraft.host}:${config.minecraft.port}...`, 'minecraft');
+      log(`[NOTE] This is a simulated connection - no actual connection to the Minecraft server is being made`, 'minecraft');
       
       // Check if agent is already connected
       const existingConnection = this.connections.get(agentId);
@@ -101,12 +115,14 @@ export class MinecraftConnector {
         try {
           existingConnection.client.end('Reconnecting agent');
         } catch (e) {
-          // Ignore errors when ending previous connections
+          log(`Error disconnecting previous connection for agent ${agentId}: ${e}`, 'minecraft');
         }
       }
       
       // Unique username for this agent
       const username = `${agentName}_${agentId}`;
+      
+      log(`Creating new Bedrock client for ${username} to connect to ${config.minecraft.host}:${config.minecraft.port}`, 'minecraft');
       
       // Connect to Minecraft server using our simulated Bedrock client
       const client = new BedrockClient({
@@ -140,6 +156,18 @@ export class MinecraftConnector {
         const updatedConnection = this.connections.get(agentId);
         if (updatedConnection) {
           updatedConnection.status = 'connected';
+          this.connections.set(agentId, updatedConnection);
+        }
+      });
+      
+      client.on('error', (errorMessage) => {
+        log(`Agent ${agentId} (${agentName}) connection error: ${errorMessage}`, 'minecraft');
+        
+        // Update connection status to disconnected on error
+        const updatedConnection = this.connections.get(agentId);
+        if (updatedConnection) {
+          updatedConnection.status = 'disconnected';
+          updatedConnection.lastCommandResponse = `Connection error: ${errorMessage}`;
           this.connections.set(agentId, updatedConnection);
         }
       });
@@ -237,7 +265,8 @@ export class MinecraftConnector {
         };
       }
       
-      log(`Sending command to agent ${agentId}: ${command}`, 'minecraft');
+      log(`[SIMULATION] Sending command to agent ${agentId}: ${command}`, 'minecraft');
+      log(`[NOTE] This is a simulated command - no actual command is being sent to the Minecraft server`, 'minecraft');
       
       // Process different types of commands
       let processedCommand = command;
