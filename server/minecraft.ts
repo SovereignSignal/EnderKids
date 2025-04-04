@@ -1,16 +1,19 @@
 import { createHash } from 'crypto';
 import { config } from './config';
 import { log } from './vite';
+import { spawn } from 'child_process';
+import { join } from 'path';
+import { existsSync } from 'fs';
 
-// Define a simulated Minecraft client for Bedrock Edition
+// Define a real Minecraft client for Bedrock Edition using the minecraft-agent implementation
 class BedrockClient {
   private host: string;
   private port: number;
   private username: string;
   private callbacks: Record<string, Array<(data?: any) => void>>;
-  private simulatedConnectionDelay = 1500; // ms
-  private connectionTimeout: NodeJS.Timeout | null = null;
   private isConnected: boolean = false;
+  private agentProcess: any = null;
+  private position: { x: number; y: number; z: number } = { x: 0, y: 64, z: 0 };
 
   constructor(options: {
     host: string,
@@ -24,16 +27,186 @@ class BedrockClient {
 
     log(`BedrockClient: Attempting to connect to ${this.host}:${this.port} as ${this.username}`, 'minecraft');
     
-    // Simulate connection process
-    this.connectionTimeout = setTimeout(() => {
-      // Always attempt to connect to the configured server
-      log(`BedrockClient: Attempting to connect to ${this.host}:${this.port} as ${this.username}`, 'minecraft');
+    // Check if we should use real connection or simulation
+    const useRealConnection = process.env.USE_REAL_MINECRAFT_CONNECTION === 'true';
+    
+    if (useRealConnection) {
+      this.connectToRealServer();
+    } else {
+      log(`[SIMULATION] Connection to ${this.host}:${this.port} as ${this.username} is being simulated`, 'minecraft');
+      log(`[NOTE] Set USE_REAL_MINECRAFT_CONNECTION=true in environment to use real connections`, 'minecraft');
       
-      // For this simulation, we'll assume the connection is successful
-      this.isConnected = true;
-      log(`BedrockClient: Successfully connected to ${this.host}:${this.port} as ${this.username}`, 'minecraft');
-      this.triggerEvent('connect');
-    }, this.simulatedConnectionDelay);
+      // Simulate successful connection
+      setTimeout(() => {
+        this.isConnected = true;
+        log(`[SIMULATION] Successfully connected to ${this.host}:${this.port} as ${this.username}`, 'minecraft');
+        this.triggerEvent('connect');
+      }, 1500);
+    }
+  }
+
+  private connectToRealServer() {
+    try {
+      // Path to the minecraft-agent directory
+      const agentDir = join(process.cwd(), 'minecraft-agent');
+      
+      // Check if the directory exists
+      if (!existsSync(agentDir)) {
+        log(`Error: minecraft-agent directory not found at ${agentDir}`, 'minecraft');
+        this.triggerEvent('error', 'minecraft-agent directory not found');
+        return;
+      }
+      
+      // Create a temporary connection script for this agent
+      const scriptContent = `
+        // Temporary connection script for ${this.username}
+        import bedrock from 'bedrock-protocol';
+
+        // Configuration
+        const config = {
+          host: '${this.host}',
+          port: ${this.port},
+          username: '${this.username}',
+          offline: true
+        };
+
+        console.log(\`Connecting to \${config.host}:\${config.port} as \${config.username}\`);
+
+        // Create the client
+        const client = bedrock.createClient(config);
+
+        // Handle connection events
+        client.on('spawn', () => {
+          console.log('CONNECTED:Agent has spawned in the world!');
+          
+          // Listen for position updates
+          client.on('move_player', (packet) => {
+            const position = {
+              x: packet.params.position.x,
+              y: packet.params.position.y,
+              z: packet.params.position.z
+            };
+            console.log(\`POSITION:\${JSON.stringify(position)}\`);
+          });
+        });
+
+        client.on('text', (packet) => {
+          console.log(\`MESSAGE:\${packet.params.message}\`);
+        });
+
+        client.on('error', (err) => {
+          console.error(\`ERROR:\${err}\`);
+          process.exit(1);
+        });
+
+        client.on('close', () => {
+          console.log('DISCONNECTED:Connection closed');
+          process.exit(0);
+        });
+
+        // Handle commands from parent process
+        process.on('message', (message) => {
+          if (message.type === 'command') {
+            console.log(\`Sending command: \${message.command}\`);
+            
+            client.queue('text', {
+              type: 'chat',
+              needs_translation: false,
+              source_name: config.username,
+              xuid: '',
+              platform_chat_id: '',
+              message: message.command
+            });
+          } else if (message.type === 'disconnect') {
+            console.log('Disconnecting...');
+            client.close();
+          }
+        });
+
+        // Handle process termination
+        process.on('SIGINT', () => {
+          console.log('Disconnecting...');
+          client.close();
+          process.exit(0);
+        });
+      `;
+      
+      // Spawn the Node.js process to run the agent
+      const nodeExecutable = process.execPath; // Get the current Node.js executable path
+      
+      log(`Starting real Minecraft Bedrock client for ${this.username}...`, 'minecraft');
+      
+      // Use the simple-agent.js script from the minecraft-agent directory
+      // This avoids having to create a temporary file
+      this.agentProcess = spawn(nodeExecutable, [join(agentDir, 'simple-agent.js')], {
+        cwd: agentDir,
+        env: {
+          ...process.env,
+          MINECRAFT_HOST: this.host,
+          MINECRAFT_PORT: this.port.toString(),
+          MINECRAFT_USERNAME: this.username
+        },
+        stdio: ['pipe', 'pipe', 'pipe', 'ipc'] // Enable IPC channel
+      });
+      
+      // Handle stdout (for logging)
+      this.agentProcess.stdout.on('data', (data: Buffer) => {
+        const output = data.toString().trim();
+        
+        // Parse special messages
+        if (output.startsWith('CONNECTED:')) {
+          this.isConnected = true;
+          log(`BedrockClient: ${this.username} connected to Minecraft server`, 'minecraft');
+          this.triggerEvent('connect');
+        } else if (output.startsWith('DISCONNECTED:')) {
+          this.isConnected = false;
+          log(`BedrockClient: ${this.username} disconnected from Minecraft server`, 'minecraft');
+          this.triggerEvent('disconnect', output.substring(13));
+        } else if (output.startsWith('ERROR:')) {
+          log(`BedrockClient Error: ${output.substring(6)}`, 'minecraft');
+          this.triggerEvent('error', output.substring(6));
+        } else if (output.startsWith('POSITION:')) {
+          try {
+            this.position = JSON.parse(output.substring(9));
+            this.triggerEvent('position', this.position);
+          } catch (e) {
+            log(`Error parsing position: ${e}`, 'minecraft');
+          }
+        } else if (output.startsWith('MESSAGE:')) {
+          log(`Message from server: ${output.substring(8)}`, 'minecraft');
+          this.triggerEvent('message', output.substring(8));
+        } else {
+          log(`BedrockClient: ${output}`, 'minecraft');
+        }
+      });
+      
+      // Handle stderr (for errors)
+      this.agentProcess.stderr.on('data', (data: Buffer) => {
+        const error = data.toString().trim();
+        log(`BedrockClient Error: ${error}`, 'minecraft');
+        this.triggerEvent('error', error);
+      });
+      
+      // Handle process exit
+      this.agentProcess.on('close', (code: number) => {
+        this.isConnected = false;
+        log(`BedrockClient: Process exited with code ${code}`, 'minecraft');
+        this.agentProcess = null;
+        this.triggerEvent('disconnect', `Process exited with code ${code}`);
+      });
+      
+      // Handle process errors
+      this.agentProcess.on('error', (err: Error) => {
+        this.isConnected = false;
+        log(`BedrockClient Error: ${err.message}`, 'minecraft');
+        this.agentProcess = null;
+        this.triggerEvent('error', err.message);
+      });
+      
+    } catch (error) {
+      log(`Error starting Minecraft Bedrock client: ${error}`, 'minecraft');
+      this.triggerEvent('error', error);
+    }
   }
 
   on(event: string, callback: (data?: any) => void) {
@@ -55,20 +228,43 @@ class BedrockClient {
   }
 
   end(reason: string) {
-    if (this.connectionTimeout) {
-      clearTimeout(this.connectionTimeout);
-      this.connectionTimeout = null;
+    if (this.agentProcess) {
+      // Send disconnect message to the agent process
+      if (this.agentProcess.connected) {
+        this.agentProcess.send({ type: 'disconnect' });
+      }
+      
+      // Give it a moment to clean up, then kill if still running
+      setTimeout(() => {
+        if (this.agentProcess) {
+          this.agentProcess.kill();
+          this.agentProcess = null;
+        }
+      }, 1000);
     }
+    
     this.isConnected = false;
     this.triggerEvent('disconnect', reason);
   }
 
-  // Simulate sending a chat message/command
+  // Send a chat message/command to the Minecraft server
   sendChat(message: string) {
-    log(`[SIMULATION] Chat message sent to ${this.host}:${this.port} as ${this.username}: ${message}`, 'minecraft');
-    log(`[NOTE] This is a simulation - no actual connection to the Minecraft server is being made`, 'minecraft');
-    // In a real implementation, this would use the Bedrock protocol to send commands
-    return true;
+    if (this.agentProcess && this.isConnected) {
+      // Send the command to the agent process
+      if (this.agentProcess.connected) {
+        this.agentProcess.send({ type: 'command', command: message });
+        log(`Command sent to ${this.host}:${this.port} as ${this.username}: ${message}`, 'minecraft');
+        return true;
+      }
+    } else if (process.env.USE_REAL_MINECRAFT_CONNECTION !== 'true') {
+      // Simulate sending a command
+      log(`[SIMULATION] Chat message sent to ${this.host}:${this.port} as ${this.username}: ${message}`, 'minecraft');
+      log(`[NOTE] This is a simulation - no actual connection to the Minecraft server is being made`, 'minecraft');
+      return true;
+    }
+    
+    log(`Failed to send command: Client not connected`, 'minecraft');
+    return false;
   }
 }
 

@@ -1,91 +1,98 @@
-# Minecraft Bedrock Agent
+# Minecraft Bedrock Agent Tools
 
-This is a standalone agent that connects to a Minecraft Bedrock server and performs exploration actions.
+This directory contains tools and scripts for connecting to a Minecraft Bedrock server.
 
-## Prerequisites
+## Contents
 
-- Node.js (v16 or higher)
-- npm
-- CMake (required for building native dependencies)
+- `setup.js` - Interactive setup script to help you get started
+- `real-agent-sample.js` - Sample implementation of a real Minecraft Bedrock agent
+- `mock-bedrock-protocol.js` - Mock implementation of the bedrock-protocol library (for development without native dependencies)
+- `simple-agent.js` - Simple agent implementation using the mock protocol
+- `demo-agent.js` - Demo agent implementation
+- `test-protocol-versions.js` - Script to test different protocol versions with your Minecraft server
+- `xbox-auth-setup.js` - Script to set up Xbox Live authentication for Minecraft Bedrock
+- `connect.py`, `connect_fixed.py`, `connect_multi.py` - Python scripts for testing server connectivity
 
-## Installation
+## Getting Started
 
-1. Install dependencies:
+### Option 1: Use the Setup Script (Recommended)
+
+The setup script will guide you through the process of setting up a real Minecraft Bedrock agent:
+
+```bash
+# Make the script executable (if not already)
+chmod +x setup.js
+
+# Run the setup script
+./setup.js
+```
+
+This will:
+1. Check for required dependencies
+2. Create a new project directory
+3. Set up the project structure
+4. Configure the agent
+
+### Option 2: Manual Setup
+
+1. Create a new directory for your agent:
+   ```bash
+   mkdir minecraft-real-agent
+   cd minecraft-real-agent
    ```
-   npm install
+
+2. Initialize a new Node.js project:
+   ```bash
+   npm init -y
    ```
 
-## Configuration
+3. Update package.json to use ES modules:
+   ```json
+   {
+     "type": "module"
+   }
+   ```
 
-Edit the `index.js` file to update the configuration:
+4. Install dependencies:
+   ```bash
+   npm install bedrock-protocol
+   ```
 
-```javascript
-const config = {
-  host: '147.135.41.229',  // Your Apex Hosting server IP
-  port: 25565,             // Your server port
-  username: 'ExplorerBot', // The username to connect with
-  offline: true            // Use offline mode (no Xbox Live authentication)
-};
-```
+5. Copy the sample agent implementation:
+   ```bash
+   cp ../minecraft-agent/real-agent-sample.js index.js
+   ```
 
-## Running the Agent
+6. Edit the configuration in index.js to match your server settings.
 
-```
-npm start
-```
-
-## What the Agent Does
-
-1. Connects to the specified Minecraft Bedrock server
-2. Spawns in the world
-3. Executes a series of commands:
-   - `/look around`
-   - `/move forward 10`
-   - `/explore`
-   - `/find resources`
-   - `/build shelter`
-4. Disconnects after completing all commands
+7. Run the agent:
+   ```bash
+   node index.js
+   ```
 
 ## Troubleshooting
 
-### Connection Issues
+If you encounter issues with native dependencies:
 
-- Make sure your Minecraft server allows connections from external clients
-- Verify that the server IP and port are correct
-- Check if the server allows offline mode connections (if offline: true)
-
-### Build Errors
-
-If you encounter build errors related to native dependencies:
-
-1. Make sure CMake is installed:
-   ```
-   # On macOS
-   brew install cmake
-   
-   # On Ubuntu/Debian
-   sudo apt-get install cmake
-   
-   # On Windows
-   # Install from https://cmake.org/download/
+1. Make sure you have CMake installed:
+   ```bash
+   cmake --version
    ```
 
-2. Install build tools:
+2. Make sure you have the necessary build tools installed:
+   - macOS: `xcode-select --install`
+   - Windows: Visual Studio Build Tools
+   - Linux: `sudo apt-get install build-essential`
+
+3. If you still have issues, you can use the mock implementation for development:
+   ```javascript
+   // Import the mock implementation instead of the real one
+   import bedrock from './mock-bedrock-protocol.js';
    ```
-   # On macOS
-   xcode-select --install
-   
-   # On Ubuntu/Debian
-   sudo apt-get install build-essential
-   
-   # On Windows
-   npm install --global windows-build-tools
-   ```
 
-## Server Configuration
+## Additional Resources
 
-Your Minecraft Bedrock server may need specific settings to allow external connections:
-
-1. Make sure the server is publicly accessible
-2. Check if the server allows offline mode connections
-3. Verify that the server port is open and properly forwarded
+For more information, see:
+- `REAL_MINECRAFT_IMPLEMENTATION.md` - Detailed guide on implementing a real connection
+- `MINECRAFT_IMPLEMENTATION_NEXT_STEPS.md` - Next steps for implementation
+- `MINECRAFT_INTEGRATION.md` - Information about the current simulation implementation
